@@ -40,7 +40,7 @@ class WatermarkRemover(object):
         dilated = cv2.dilate(img, _DILATE_KERNEL)
         return dilated
 
-    def generate_template_gray_and_mask(self, watermark_template_filename):
+    def generate_template_gray_and_mask(self, watermark_template_filename, watermark_template_filename2 = False):
         """
         处理水印模板，生成对应的检索位图和掩码位图
         检索位图
@@ -68,13 +68,24 @@ class WatermarkRemover(object):
         mask = cv2.cvtColor(mask, cv2.COLOR_GRAY2BGR)
 
         self.watermark_template_gray_img = gray
-        self.watermark_template_mask_img = mask
+
+        # 从外部指定拓补图
+        if watermark_template_filename2:
+            self.watermark_template_mask_img = cv2.imread(watermark_template_filename2)
+        else:
+            self.watermark_template_mask_img = mask
 
         self.watermark_template_h = img.shape[0]
         self.watermark_template_w = img.shape[1]
 
-        # cv2.imwrite('watermark-template-gray.jpg', gray)
-        # cv2.imwrite('watermark-template-mask.jpg', mask)
+        # 测试输出
+        if self.dev_output:
+            cv2.imwrite(f'{self.image_path}/mask-gray.jpg', gray)
+            # cv2.imwrite(f'{self.image_path}/mask2.jpg', mask)
+
+        with open(f'{self.image_path}/log.txt','w',encoding = 'utf-8') as file:
+            file.write(f'template_w:{self.watermark_template_w}\n')
+            file.write(f'template_h:{self.watermark_template_h}\n')
 
         return gray, mask
 
@@ -87,6 +98,17 @@ class WatermarkRemover(object):
         # Load the images in gray scale
         gray_img = cv2.imread(filename, 0)
         return self.find_watermark_from_gray(gray_img, self.watermark_template_gray_img)
+    
+    def normalize_image(self,image, range_min=0, range_max=1):
+        """
+        图形归一化
+        :param image    图片cv2对象:
+        :range_min      图片最小比例
+        :range_max      图片最大比例
+        """
+        normalized_image = (image - image.min()) / (image.max() - image.min())
+        normalized_image = range_min + normalized_image * (range_max - range_min)
+        return normalized_image
 
     def find_watermark_from_gray(self, gray_img, watermark_template_gray_img):
         """
@@ -95,6 +117,11 @@ class WatermarkRemover(object):
         :param watermark_template_gray_img: 水印模板的灰度图
         :return: x1, y1, x2, y2
         """
+
+        # 测试输出
+        if self.dev_output:
+            cv2.imwrite(f'{self.image_path}/{self.image_name}-gray.{self.image_suffix}',gray_img)
+
         # Load the images in gray scale
 
         method = cv2.TM_CCOEFF
@@ -106,7 +133,12 @@ class WatermarkRemover(object):
         if method in [cv2.TM_SQDIFF, cv2.TM_SQDIFF_NORMED]:
             x, y = min_loc
         else:
+            print(max_val)
             x, y = max_loc
+
+        with open(f'{self.image_path}/log.txt','a',encoding = 'utf-8') as file:
+            file.write(f'target_x:{x}\n')
+            file.write(f'target_y:{y}\n')
 
         return x, y, x + self.watermark_template_w, y + self.watermark_template_h
 
